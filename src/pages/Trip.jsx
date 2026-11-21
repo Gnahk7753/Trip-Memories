@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { api, fmtDate, fmtTime, download } from '../api.js';
+import { api, fmtDate, fmtTime, download, uploadMedia } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { useToast } from '../toast.jsx';
 import SmartImg from '../components/SmartImg.jsx';
@@ -17,6 +17,7 @@ export default function Trip() {
   const [err, setErr] = useState('');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [prog, setProg] = useState(null);
   const [lb, setLb] = useState(null);
   const fileRef = useRef();
   const nav = useNavigate();
@@ -34,11 +35,11 @@ export default function Trip() {
     if (!files.length) return;
     setBusy(true);
     try {
-      const fd = new FormData(); files.slice(0, 20).forEach((f) => fd.append('media', f));
-      const d = await api.post(`/trips/${id}/media`, fd);
-      setData((p) => ({ ...p, media: [...p.media, ...d.media] }));
-      toast(`Đã thêm ${d.media.length} file`);
-    } catch (x) { toast(x.message, 'error'); } finally { setBusy(false); }
+      const r = await uploadMedia(id, files, (a, b) => setProg({ a, b }), (added) => setData((p) => ({ ...p, media: [...p.media, ...added] })));
+      const ok = r.total - r.failed.length;
+      if (ok) toast(`Đã thêm ${ok} file`);
+      if (r.failed.length) toast(`${r.failed.length} file tải lên thất bại (quá 50MB hoặc lỗi mạng): ${r.failed.slice(0, 3).join(', ')}${r.failed.length > 3 ? '…' : ''}`, 'error');
+    } catch (x) { toast(x.message, 'error'); } finally { setBusy(false); setProg(null); }
   };
   const send = async (e) => {
     e.preventDefault(); if (!text.trim()) return;
@@ -91,7 +92,7 @@ export default function Trip() {
               <h2 className="font-semibold">Hình ảnh & video ({media.length})</h2>
               <div className="flex gap-2">
                 {media.length > 0 && <button className="btn btn-ghost" onClick={downloadAll}>⬇ Tải tất cả</button>}
-                <button className="btn btn-ghost" onClick={() => fileRef.current.click()} disabled={busy}>{busy ? 'Đang tải…' : '+ Thêm'}</button>
+                <button className="btn btn-ghost" onClick={() => fileRef.current.click()} disabled={busy}>{busy ? (prog ? `Đang tải ${prog.a}/${prog.b}…` : 'Đang tải…') : '+ Thêm'}</button>
               </div>
               <input ref={fileRef} type="file" accept="image/*,video/*" multiple hidden onChange={addMedia} />
             </div>

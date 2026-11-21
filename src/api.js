@@ -34,3 +34,28 @@ export function download(url) {
   a.click();
   a.remove();
 }
+
+// Tải nhiều file theo từng đợt nhỏ (tối đa 5 file hoặc ~60MB/đợt) => không giới hạn số lượng
+// mà server (RAM Render) và Cloudinary vẫn xử lý ổn. onProgress(đã xong, tổng).
+export function makeBatches(files, maxCount = 5, maxBytes = 60 * 1024 * 1024) {
+  const batches = []; let cur = []; let bytes = 0;
+  for (const f of files) {
+    if (cur.length && (cur.length >= maxCount || bytes + f.size > maxBytes)) { batches.push(cur); cur = []; bytes = 0; }
+    cur.push(f); bytes += f.size;
+  }
+  if (cur.length) batches.push(cur);
+  return batches;
+}
+export async function uploadMedia(tripId, files, onProgress = () => {}, onBatch = () => {}) {
+  let done = 0; const failed = [];
+  onProgress(0, files.length);
+  for (const batch of makeBatches(files)) {
+    try {
+      const fd = new FormData(); batch.forEach((f) => fd.append('media', f));
+      const d = await api.post(`/trips/${tripId}/media`, fd);
+      onBatch(d.media);
+    } catch (e) { failed.push(...batch.map((f) => f.name)); }
+    done += batch.length; onProgress(done, files.length);
+  }
+  return { total: files.length, failed };
+}

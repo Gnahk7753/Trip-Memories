@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../api.js';
+import { api, uploadMedia } from '../api.js';
 import { useAuth } from '../auth.jsx';
 
 export default function NewTrip() {
@@ -14,6 +14,7 @@ export default function NewTrip() {
   const [files, setFiles] = useState([]);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [prog, setProg] = useState(null);
 
   useEffect(() => { api.get('/users').then((d) => setUsers(d.users.filter((u) => u.id !== user.id))); }, [user.id]);
   const previews = useMemo(() => files.map((f) => ({ url: URL.createObjectURL(f), video: f.type.startsWith('video/') })), [files]);
@@ -25,15 +26,18 @@ export default function NewTrip() {
       const fd = new FormData();
       fd.append('name', name); fd.append('trip_date', date); fd.append('description', desc);
       fd.append('members', JSON.stringify([...sel]));
-      files.forEach((f) => fd.append('media', f));
-      const d = await api.post('/trips', fd);
+      const d = await api.post('/trips', fd); // tạo chuyến đi trước, rồi tải ảnh/video theo từng đợt
+      if (files.length) {
+        const r = await uploadMedia(d.id, files, (a, b) => setProg({ a, b }));
+        if (r.failed.length) alert(`${r.failed.length} file tải lên thất bại (quá 50MB hoặc lỗi mạng). Bạn có thể thêm lại trong trang chuyến đi.`);
+      }
       nav(`/trips/${d.id}`);
     } catch (x) { setErr(x.message); setBusy(false); }
   };
 
   return (
     <form onSubmit={submit} className="space-y-6">
-      <h1 className="text-xl font-bold">Add Memories</h1>
+      <h1 className="text-xl font-bold">Tạo kỷ niệm mới</h1>
 
       <section className="card p-4 space-y-3">
         <h2 className="font-semibold">1. Những ai đã đi cùng?</h2>
@@ -56,8 +60,8 @@ export default function NewTrip() {
         <div><label className="label">Ngày đi</label><input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} required /></div>
         <div><label className="label">Mô tả</label><textarea className="input" rows={2} value={desc} onChange={(e) => setDesc(e.target.value)} /></div>
         <div>
-          <label className="label">Hình ảnh / video (tối đa 20 file, mỗi file ≤ 50MB)</label>
-          <input type="file" accept="image/*,video/*" multiple onChange={(e) => setFiles([...e.target.files].slice(0, 20))}
+          <label className="label">Hình ảnh / video (không giới hạn số lượng, mỗi file ≤ 50MB)</label>
+          <input type="file" accept="image/*,video/*" multiple onChange={(e) => setFiles([...e.target.files])}
             className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-indigo-700" />
           {previews.length > 0 && (
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-3">
@@ -70,7 +74,7 @@ export default function NewTrip() {
       </section>
 
       {err && <p className="text-sm text-red-600">{err}</p>}
-      <button className="btn btn-primary w-full" disabled={busy || sel.size === 0}>{busy ? 'Đang tải lên… (có thể mất vài phút)' : 'Lưu kỷ niệm'}</button>
+      <button className="btn btn-primary w-full" disabled={busy || sel.size === 0}>{busy ? (prog ? `Đang tải lên ${prog.a}/${prog.b} file… (có thể mất vài phút)` : 'Đang tạo…') : 'Lưu kỷ niệm'}</button>
     </form>
   );
 }

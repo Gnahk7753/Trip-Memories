@@ -53,9 +53,9 @@ npm run dev:client          # giao diện tại http://localhost:5173
 - Mỗi phần chia của người *không phải người trả* ⇒ người đó nợ người trả.
 - Gộp mọi khoản cùng chiều giữa 2 người (100k ăn + 50k nước, đều do B trả ⇒ A trả B **150k**); nợ ngược chiều được bù trừ.
 - A bấm **Thanh toán / Xem mã QR** → thấy QR của B → chuyển khoản → bấm **Tôi đã chuyển khoản** (trạng thái chờ).
-- B vào tab Chi phí bấm **Xác nhận đã nhận** → khoản nợ được trừ (payment `confirmed`).
+- B chỉ thấy thẻ **Xác nhận đã nhận** sau khi A bấm *Tôi đã chuyển khoản*; B xác nhận → khoản nợ được trừ (payment `confirmed`).
 - Chia đều: phần lẻ (không chia hết) được rải 1đ cho những người đầu danh sách. Chia theo người: bắt buộc tổng khớp hoá đơn.
 
 ## Giới hạn & mở rộng
-- Mỗi file ≤ 50MB, tối đa 20 file/lần (đi qua server Render). Nếu cần video lớn hơn, chuyển sang upload trực tiếp từ trình duyệt lên Cloudinary (signed upload).
+- Không giới hạn số lượng ảnh/video: trình duyệt tự chia thành các đợt nhỏ (≤ 5 file hoặc ~60MB/đợt) để tải lên. Mỗi file ≤ 50MB (đi qua server Render). Nếu cần video lớn hơn, chuyển sang upload trực tiếp từ trình duyệt lên Cloudinary (signed upload).
 - Chỉ thành viên của chuyến đi mới xem được ảnh, bình luận, chi phí và QR của chuyến đó.

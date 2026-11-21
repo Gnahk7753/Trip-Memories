@@ -145,6 +145,13 @@ function Debts({ tripId, me, tick }) {
   const toast = useToast();
   const load = () => api.get(`/trips/${tripId}/debts`).then((d) => setDebts(d.debts));
   useEffect(() => { load(); }, [tripId, tick]);
+  // Tự cập nhật để chủ nợ thấy yêu cầu xác nhận ngay khi bạn bè báo chuyển khoản
+  useEffect(() => {
+    const t = setInterval(() => { if (!document.hidden) load(); }, 15000);
+    const v = () => { if (!document.hidden) load(); };
+    document.addEventListener('visibilitychange', v);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', v); };
+  }, [tripId]);
 
   const act = async (fn, ok) => { setBusy(true); try { await fn(); await load(); if (ok) toast(ok); } catch (x) { toast(x.message, 'error'); } finally { setBusy(false); } };
   const paid = () => act(async () => { await api.post(`/trips/${tripId}/payments`, { to_user: qr.to }); setQr(null); }, 'Đã báo chuyển khoản, chờ người nhận xác nhận');
@@ -152,18 +159,23 @@ function Debts({ tripId, me, tick }) {
 
   if (!debts) return null;
   const mine = debts.filter((d) => d.from === me.id);
-  const owed = debts.filter((d) => d.to === me.id);
+  const owedAll = debts.filter((d) => d.to === me.id);
+  const owed = owedAll.filter((d) => d.pending > 0); // chỉ hiện khi người nợ đã bấm "Tôi đã chuyển khoản"
   const others = debts.filter((d) => d.from !== me.id && d.to !== me.id);
+  const reasons = (d) => { const t = [...new Set(d.details.map((x) => x.title))]; return t.length ? ` (${t.join(', ')})` : ''; };
   const detail = (d) => d.details.length > 1 ? d.details.map((x) => `${x.title} ${vnd(x.amount)}`).join(' + ') : '';
 
   return (
     <section className="space-y-3">
       <h2 className="font-semibold">Công nợ (đã cộng dồn)</h2>
       {debts.length === 0 && <p className="text-sm text-emerald-600">🎉 Không còn khoản nợ nào.</p>}
+      {debts.length > 0 && mine.length === 0 && owed.length === 0 && others.length === 0 && (
+        <p className="text-sm text-slate-400">Chưa có yêu cầu xác nhận nào.</p>
+      )}
 
       {mine.map((d) => (
         <div key={`${d.from}-${d.to}`} className="card p-4 border-l-4 border-l-rose-400">
-          <div className="text-sm">Bạn cần trả <b>{d.to_name}</b></div>
+          <div className="text-sm">Bạn cần trả <b>{d.to_name}</b>{reasons(d)}</div>
           <div className="text-2xl font-bold text-rose-600">{vnd(d.amount)}</div>
           {detail(d) && <div className="text-xs text-slate-500 mt-1">{detail(d)}</div>}
           {d.pending > 0 && <div className="text-xs text-amber-600 mt-1">⏳ Đã báo chuyển {vnd(d.pending)}, chờ {d.to_name} xác nhận</div>}
@@ -173,12 +185,12 @@ function Debts({ tripId, me, tick }) {
 
       {owed.map((d) => (
         <div key={`${d.from}-${d.to}`} className="card p-4 border-l-4 border-l-emerald-400">
-          <div className="text-sm"><b>{d.from_name}</b> cần trả bạn</div>
+          <div className="text-sm"><b>{d.from_name}</b> cần trả bạn{reasons(d)}</div>
           <div className="text-2xl font-bold text-emerald-600">{vnd(d.amount)}</div>
           {detail(d) && <div className="text-xs text-slate-500 mt-1">{detail(d)}</div>}
-          {d.pending > 0 && <div className="text-xs text-amber-600 mt-1">⏳ {d.from_name} báo đã chuyển {vnd(d.pending)} — hãy kiểm tra tài khoản</div>}
+          <div className="text-xs text-amber-600 mt-1">⏳ {d.from_name} báo đã chuyển {vnd(d.pending)} — hãy kiểm tra tài khoản</div>
           <button className="btn btn-green mt-3" disabled={busy} onClick={() => confirmRecv(d)}>
-            ✓ Xác nhận đã nhận {vnd(d.pending > 0 ? d.pending : d.amount)}
+            ✓ Xác nhận đã nhận {vnd(d.pending)}
           </button>
         </div>
       ))}

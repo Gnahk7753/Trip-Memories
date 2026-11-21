@@ -112,7 +112,7 @@ app.get('/api/trips', requireAuth, h(async (req, res) => {
   res.json({ trips: rows });
 }));
 
-app.post('/api/trips', requireAuth, upload.array('media', 20), h(async (req, res) => {
+app.post('/api/trips', requireAuth, upload.array('media'), h(async (req, res) => {
   const name = String(req.body.name || '').trim();
   const trip_date = String(req.body.trip_date || '');
   const description = String(req.body.description || '').trim();
@@ -170,7 +170,7 @@ app.delete('/api/trips/:id', requireAuth, member, h(async (req, res) => {
   res.json({ ok: true });
 }));
 
-app.post('/api/trips/:id/media', requireAuth, member, upload.array('media', 20), h(async (req, res) => {
+app.post('/api/trips/:id/media', requireAuth, member, upload.array('media'), h(async (req, res) => {
   if (!req.files?.length) return bad(res, 'Chưa chọn file');
   const uploaded = await Promise.all(req.files.map((f) => uploadToCloud(f, 'trips')));
   const added = [];
@@ -276,11 +276,11 @@ app.post('/api/trips/:id/payments/confirm', requireAuth, member, h(async (req, r
   const from = Number(req.body.from_user);
   const d = (await computeDebts(tid)).find((x) => x.from === from && x.to === req.userId);
   if (!d) return res.json({ ok: true });
+  // Chỉ xác nhận được khi con nợ đã bấm "Tôi đã chuyển khoản" (payment pending)
   const r = await q(
     `UPDATE payments SET status='confirmed', confirmed_at=now()
       WHERE trip_id=$1 AND from_user=$2 AND to_user=$3 AND status='pending'`, [tid, from, req.userId]);
-  if (r.rowCount === 0) // chưa có báo chuyển khoản: chủ nợ xác nhận thẳng toàn bộ số còn nợ
-    await q(`INSERT INTO payments(trip_id,from_user,to_user,amount,status,confirmed_at) VALUES($1,$2,$3,$4,'confirmed',now())`, [tid, from, req.userId, d.amount]);
+  if (r.rowCount === 0) return bad(res, 'Người này chưa báo đã chuyển khoản');
   res.json({ ok: true });
 }));
 

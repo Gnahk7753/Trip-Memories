@@ -4,7 +4,7 @@ import { v2 as cloudinary } from 'cloudinary';
 // File giữ trong RAM rồi đẩy thẳng lên Cloudinary => không ghi đĩa Render (đĩa mất khi restart)
 export const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024, files: 20 },
+  limits: { fileSize: 50 * 1024 * 1024 }, // không giới hạn số file; client tự chia thành nhiều đợt nhỏ
   fileFilter: (_req, file, cb) =>
     /^(image|video)\//.test(file.mimetype) ? cb(null, true) : cb(new Error('Chỉ cho phép ảnh hoặc video')),
 });
