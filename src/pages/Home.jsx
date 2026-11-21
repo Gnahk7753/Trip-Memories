@@ -11,7 +11,7 @@ export default function Home() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold">Dòng thời gian</h1>
-        <Link to="/trips/new" className="btn btn-primary">+ Tạo kỷ niệm mới</Link>
+        <Link to="/trips/new" className="btn btn-primary">+ Add Memories</Link>
       </div>
       {trips === null ? (
         <p className="text-slate-500">Đang tải…</p>

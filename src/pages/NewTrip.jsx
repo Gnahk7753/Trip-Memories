@@ -33,7 +33,7 @@ export default function NewTrip() {
 
   return (
     <form onSubmit={submit} className="space-y-6">
-      <h1 className="text-xl font-bold">Tạo kỷ niệm mới</h1>
+      <h1 className="text-xl font-bold">Add Memories</h1>
 
       <section className="card p-4 space-y-3">
         <h2 className="font-semibold">1. Những ai đã đi cùng?</h2>

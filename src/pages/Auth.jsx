@@ -23,7 +23,7 @@ export default function Auth() {
       <form onSubmit={submit} className="card w-full max-w-sm p-6 space-y-4">
         <div className="text-center">
           <img src="/logo.png" alt="" className="w-20 h-20 mx-auto" />
-          <h1 className="text-xl font-bold mt-1">Kỷ niệm chuyến đi</h1>
+          <h1 className="text-xl font-bold mt-1">Memories</h1>
           <p className="text-sm text-slate-500">{mode === 'login' ? 'Đăng nhập để tiếp tục' : 'Tạo tài khoản nội bộ'}</p>
         </div>
         {mode === 'register' && (
