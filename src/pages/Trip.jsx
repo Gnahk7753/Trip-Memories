@@ -1,37 +1,51 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { api, fmtDate, fmtTime } from '../api.js';
+import { api, fmtDate, fmtTime, download } from '../api.js';
 import { useAuth } from '../auth.jsx';
+import { useToast } from '../toast.jsx';
+import SmartImg from '../components/SmartImg.jsx';
+import Lightbox from '../components/Lightbox.jsx';
 import Expenses from './Expenses.jsx';
 
 export default function Trip() {
   const { id } = useParams();
   const { user } = useAuth();
+  const toast = useToast();
   const [data, setData] = useState(null);
   const [tab, setTab] = useState('memories');
   const [err, setErr] = useState('');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [lb, setLb] = useState(null);
   const fileRef = useRef();
 
-  const load = () => api.get(`/trips/${id}`).then(setData).catch((e) => setErr(e.message));
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { api.get(`/trips/${id}`).then(setData).catch((e) => setErr(e.message)); }, [id]);
 
   if (err) return <div className="card p-6 text-red-600">{err} <Link className="underline" to="/">Về trang chủ</Link></div>;
   if (!data) return <p className="text-slate-500">Đang tải…</p>;
   const { trip, members, media, comments } = data;
 
   const addMedia = async (e) => {
-    const files = [...e.target.files]; if (!files.length) return;
+    const files = [...e.target.files]; e.target.value = '';
+    if (!files.length) return;
     setBusy(true);
     try {
       const fd = new FormData(); files.slice(0, 20).forEach((f) => fd.append('media', f));
-      await api.post(`/trips/${id}/media`, fd); await load();
-    } catch (x) { alert(x.message); } finally { setBusy(false); e.target.value = ''; }
+      const d = await api.post(`/trips/${id}/media`, fd);
+      setData((p) => ({ ...p, media: [...p.media, ...d.media] }));
+      toast(`Đã thêm ${d.media.length} file`);
+    } catch (x) { toast(x.message, 'error'); } finally { setBusy(false); }
   };
   const send = async (e) => {
     e.preventDefault(); if (!text.trim()) return;
-    try { await api.post(`/trips/${id}/comments`, { content: text }); setText(''); await load(); } catch (x) { alert(x.message); }
+    try {
+      const d = await api.post(`/trips/${id}/comments`, { content: text });
+      setData((p) => ({ ...p, comments: [...p.comments, d.comment] })); setText('');
+    } catch (x) { toast(x.message, 'error'); }
+  };
+  const downloadAll = () => {
+    toast(`Đang tải ${media.length} file… (nếu trình duyệt hỏi, hãy cho phép tải nhiều file)`);
+    media.forEach((m, i) => setTimeout(() => download(m.url), i * 700));
   };
 
   return (
@@ -56,16 +70,30 @@ export default function Trip() {
       {tab === 'memories' ? (
         <>
           <section className="space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <h2 className="font-semibold">Hình ảnh & video ({media.length})</h2>
-              <button className="btn btn-ghost" onClick={() => fileRef.current.click()} disabled={busy}>{busy ? 'Đang tải…' : '+ Thêm'}</button>
+              <div className="flex gap-2">
+                {media.length > 0 && <button className="btn btn-ghost" onClick={downloadAll}>⬇ Tải tất cả</button>}
+                <button className="btn btn-ghost" onClick={() => fileRef.current.click()} disabled={busy}>{busy ? 'Đang tải…' : '+ Thêm'}</button>
+              </div>
               <input ref={fileRef} type="file" accept="image/*,video/*" multiple hidden onChange={addMedia} />
             </div>
             {media.length === 0 ? <p className="text-sm text-slate-400">Chưa có hình ảnh nào.</p> : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {media.map((m) => m.media_type === 'video'
-                  ? <video key={m.id} src={m.url} controls preload="metadata" className="w-full aspect-square object-cover rounded-xl bg-black" />
-                  : <a key={m.id} href={m.url} target="_blank" rel="noreferrer"><img src={m.url} alt="" loading="lazy" className="w-full aspect-square object-cover rounded-xl" /></a>)}
+                {media.map((m, i) => (
+                  <div key={m.id} className="relative aspect-square rounded-xl overflow-hidden bg-slate-200">
+                    <button type="button" onClick={() => setLb(i)} className="block w-full h-full">
+                      {m.media_type === 'video' ? (
+                        <>
+                          <video src={`${m.url}#t=0.1`} preload="metadata" muted playsInline className="w-full h-full object-cover bg-black" />
+                          <span className="absolute inset-0 flex items-center justify-center text-white text-4xl drop-shadow">▶</span>
+                        </>
+                      ) : <SmartImg src={m.url} loading="lazy" className="w-full h-full object-cover" />}
+                    </button>
+                    <button type="button" title="Lưu về máy" onClick={() => download(m.url)}
+                      className="absolute bottom-1.5 right-1.5 w-8 h-8 rounded-full bg-black/55 text-white text-sm hover:bg-black/75">⬇</button>
+                  </div>
+                ))}
               </div>
             )}
           </section>
@@ -92,6 +120,8 @@ export default function Trip() {
       ) : (
         <Expenses trip={{ id: trip.id, members }} me={user} />
       )}
+
+      {lb !== null && <Lightbox items={media} index={lb} onClose={() => setLb(null)} onIndex={setLb} />}
     </div>
   );
 }

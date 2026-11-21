@@ -23,3 +23,14 @@ export const fmtDate = (s) => {
   return `${d}/${m}/${y}`;
 };
 export const fmtTime = (s) => new Date(s).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+
+// Cloudinary: chèn fl_attachment để trình duyệt tải file về máy (không mở tab mới)
+export const dlUrl = (u) => (u.includes('/upload/') ? u.replace('/upload/', '/upload/fl_attachment/') : u);
+export function download(url) {
+  const a = document.createElement('a');
+  a.href = dlUrl(url);
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}

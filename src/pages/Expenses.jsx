@@ -1,29 +1,35 @@
 import { useEffect, useState } from 'react';
-import { api, vnd, num, fmtTime } from '../api.js';
+import { api, vnd, num, fmtTime, download } from '../api.js';
+import { useToast } from '../toast.jsx';
+import Confirm from '../components/Confirm.jsx';
+import SmartImg from '../components/SmartImg.jsx';
 
 export default function Expenses({ trip, me }) {
   const [expenses, setExpenses] = useState(null);
   const [open, setOpen] = useState(false);
   const [tick, setTick] = useState(0);
+  const [del, setDel] = useState(null);
+  const toast = useToast();
   const load = () => api.get(`/trips/${trip.id}/expenses`).then((d) => setExpenses(d.expenses));
   useEffect(() => { load(); }, [trip.id, tick]);
   const refresh = () => setTick((t) => t + 1);
 
-  const remove = async (e) => {
-    if (!confirm(`Xoá khoản chi "${e.title}"?`)) return;
-    try { await api.del(`/trips/${trip.id}/expenses/${e.id}`); refresh(); } catch (x) { alert(x.message); }
+  const remove = async () => {
+    const e = del; setDel(null);
+    try { await api.del(`/trips/${trip.id}/expenses/${e.id}`); toast('Đã xoá khoản chi'); refresh(); } catch (x) { toast(x.message, 'error'); }
   };
 
   return (
     <div className="space-y-6">
       <Debts tripId={trip.id} me={me} tick={tick} />
+      {del && <Confirm title={`Xoá khoản chi "${del.title}"?`} yes="Xoá" no="Không" onYes={remove} onNo={() => setDel(null)} />}
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">Các khoản chi</h2>
           <button className="btn btn-primary" onClick={() => setOpen(!open)}>{open ? 'Đóng' : '+ Thêm khoản chi'}</button>
         </div>
-        {open && <ExpenseForm trip={trip} me={me} onDone={() => { setOpen(false); refresh(); }} />}
+        {open && <ExpenseForm trip={trip} me={me} onDone={() => { setOpen(false); toast('Đã thêm khoản chi'); refresh(); }} />}
         {expenses === null ? <p className="text-slate-500 text-sm">Đang tải…</p> : expenses.length === 0 ? (
           <p className="text-sm text-slate-400">Chưa có khoản chi nào.</p>
         ) : expenses.map((e) => (
@@ -42,7 +48,7 @@ export default function Expenses({ trip, me }) {
               {e.shares.map((s) => <span key={s.user_id}>{s.full_name}: {vnd(s.amount)}</span>)}
             </div>
             {(e.created_by === me.id || e.payer_id === me.id) && (
-              <button onClick={() => remove(e)} className="text-xs text-red-500 mt-2">Xoá</button>
+              <button onClick={() => setDel(e)} className="text-xs text-red-500 mt-2">Xoá</button>
             )}
           </div>
         ))}
@@ -136,12 +142,13 @@ function Debts({ tripId, me, tick }) {
   const [debts, setDebts] = useState(null);
   const [qr, setQr] = useState(null);
   const [busy, setBusy] = useState(false);
+  const toast = useToast();
   const load = () => api.get(`/trips/${tripId}/debts`).then((d) => setDebts(d.debts));
   useEffect(() => { load(); }, [tripId, tick]);
 
-  const act = async (fn) => { setBusy(true); try { await fn(); await load(); } catch (x) { alert(x.message); } finally { setBusy(false); } };
-  const paid = () => act(async () => { await api.post(`/trips/${tripId}/payments`, { to_user: qr.to }); setQr(null); });
-  const confirmRecv = (d) => act(() => api.post(`/trips/${tripId}/payments/confirm`, { from_user: d.from }));
+  const act = async (fn, ok) => { setBusy(true); try { await fn(); await load(); if (ok) toast(ok); } catch (x) { toast(x.message, 'error'); } finally { setBusy(false); } };
+  const paid = () => act(async () => { await api.post(`/trips/${tripId}/payments`, { to_user: qr.to }); setQr(null); }, 'Đã báo chuyển khoản, chờ người nhận xác nhận');
+  const confirmRecv = (d) => act(() => api.post(`/trips/${tripId}/payments/confirm`, { from_user: d.from }), 'Đã xác nhận nhận tiền');
 
   if (!debts) return null;
   const mine = debts.filter((d) => d.from === me.id);
@@ -189,9 +196,10 @@ function Debts({ tripId, me, tick }) {
             <div className="text-sm text-slate-500">Chuyển khoản cho</div>
             <div className="text-lg font-bold">{qr.name}</div>
             <div className="text-2xl font-bold text-indigo-600">{vnd(qr.amount - qr.pending > 0 ? qr.amount - qr.pending : qr.amount)}</div>
-            {qr.qr ? <img src={qr.qr} alt="QR" className="mx-auto max-h-80 rounded-lg border" /> : (
+            {qr.qr ? <SmartImg src={qr.qr} alt="QR" className="mx-auto max-h-80 rounded-lg border" /> : (
               <p className="text-sm text-amber-600 py-6">{qr.name} chưa tải mã QR lên hồ sơ. Hãy nhắn bạn ấy bổ sung nhé.</p>
             )}
+            {qr.qr && <button type="button" className="btn btn-ghost w-full" onClick={() => download(qr.qr)}>⬇ Lưu mã QR về máy</button>}
             <button className="btn btn-green w-full" disabled={busy || qr.pending >= qr.amount} onClick={paid}>
               {qr.pending >= qr.amount ? 'Đang chờ xác nhận' : 'Tôi đã chuyển khoản'}
             </button>

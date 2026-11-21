@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, fmtDate } from '../api.js';
+import SmartImg from '../components/SmartImg.jsx';
 
 export default function Home() {
   const [trips, setTrips] = useState(null);
@@ -24,7 +25,7 @@ export default function Home() {
               <div className="text-xs font-medium text-indigo-600 mb-1">{fmtDate(t.trip_date)}</div>
               <Link to={`/trips/${t.id}`} className="card block overflow-hidden hover:shadow-md transition">
                 {t.cover_url ? (
-                  <img src={t.cover_url} alt="" loading="lazy" className="w-full h-44 sm:h-56 object-cover" />
+                  <SmartImg src={t.cover_url} loading="lazy" className="w-full h-44 sm:h-56 object-cover" />
                 ) : (
                   <div className="w-full h-24 bg-gradient-to-r from-indigo-400 to-pink-400" />
                 )}

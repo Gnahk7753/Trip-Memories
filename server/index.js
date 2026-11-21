@@ -15,6 +15,7 @@ const app = express();
 app.set('trust proxy', 1); // Render đứng sau proxy HTTPS => cookie secure hoạt động
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
+app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 
 const h = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const bad = (res, msg, code = 400) => res.status(code).json({ error: msg });
@@ -72,6 +73,16 @@ app.put('/api/me', requireAuth, h(async (req, res) => {
   if (!full_name) return bad(res, 'Tên thật không được để trống');
   const { rows } = await q('UPDATE users SET full_name=$1 WHERE id=$2 RETURNING *', [full_name, req.userId]);
   res.json({ user: publicUser(rows[0]) });
+}));
+
+app.put('/api/me/password', requireAuth, h(async (req, res) => {
+  const cur = String(req.body.current_password || '');
+  const next = String(req.body.new_password || '');
+  if (next.length < 6) return bad(res, 'Mật khẩu mới tối thiểu 6 ký tự');
+  const { rows } = await q('SELECT password_hash FROM users WHERE id=$1', [req.userId]);
+  if (!rows[0] || !(await bcrypt.compare(cur, rows[0].password_hash))) return bad(res, 'Mật khẩu hiện tại không đúng');
+  await q('UPDATE users SET password_hash=$1 WHERE id=$2', [await bcrypt.hash(next, 10), req.userId]);
+  res.json({ ok: true });
 }));
 
 app.post('/api/me/qr', requireAuth, upload.single('qr'), h(async (req, res) => {
@@ -144,17 +155,24 @@ app.get('/api/trips/:id', requireAuth, member, h(async (req, res) => {
 app.post('/api/trips/:id/media', requireAuth, member, upload.array('media', 20), h(async (req, res) => {
   if (!req.files?.length) return bad(res, 'Chưa chọn file');
   const uploaded = await Promise.all(req.files.map((f) => uploadToCloud(f, 'trips')));
-  for (const u of uploaded) await q('INSERT INTO trip_media(trip_id,url,media_type,uploaded_by) VALUES($1,$2,$3,$4)', [req.params.id, u.url, u.type, req.userId]);
+  const added = [];
+  for (const u of uploaded) {
+    const { rows } = await q('INSERT INTO trip_media(trip_id,url,media_type,uploaded_by) VALUES($1,$2,$3,$4) RETURNING id, url, media_type', [req.params.id, u.url, u.type, req.userId]);
+    added.push(rows[0]);
+  }
   const firstImg = uploaded.find((u) => u.type === 'image');
   if (firstImg) await q('UPDATE trips SET cover_url=$1 WHERE id=$2 AND cover_url IS NULL', [firstImg.url, req.params.id]);
-  res.json({ ok: true });
+  res.json({ media: added });
 }));
 
 app.post('/api/trips/:id/comments', requireAuth, member, h(async (req, res) => {
   const content = String(req.body.content || '').trim();
   if (!content) return bad(res, 'Nội dung trống');
-  await q('INSERT INTO comments(trip_id,user_id,content) VALUES($1,$2,$3)', [req.params.id, req.userId, content.slice(0, 2000)]);
-  res.json({ ok: true });
+  const { rows } = await q(
+    `WITH c AS (INSERT INTO comments(trip_id,user_id,content) VALUES($1,$2,$3) RETURNING id, content, created_at)
+     SELECT c.id, c.content, c.created_at, u.full_name FROM c, users u WHERE u.id = $2`,
+    [req.params.id, req.userId, content.slice(0, 2000)]);
+  res.json({ comment: rows[0] });
 }));
 
 /* ---------------- Expenses ---------------- */
