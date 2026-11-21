@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: trip-memories
+    runtime: node
+    plan: free
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: DATABASE_URL
+        sync: false
+      - key: CLOUDINARY_URL
+        sync: false
+      - key: INVITE_CODE
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
