@@ -23,6 +23,7 @@ export default function Trip() {
   const nav = useNavigate();
   const [addOpen, setAddOpen] = useState(false);
   const [delAsk, setDelAsk] = useState(false);
+  const [delMedia, setDelMedia] = useState(null);
 
   useEffect(() => { api.get(`/trips/${id}`).then(setData).catch((e) => setErr(e.message)); }, [id]);
 
@@ -54,6 +55,15 @@ export default function Trip() {
       setData((p) => ({ ...p, members: d.members }));
       setAddOpen(false);
       toast(`Đã thêm ${user_ids.length} người vào chuyến đi`);
+    } catch (x) { toast(x.message, 'error'); }
+  };
+  const canDel = (m) => m.uploaded_by === user.id || trip.created_by === user.id;
+  const removeMedia = async () => {
+    const m = delMedia; setDelMedia(null);
+    try {
+      await api.del(`/trips/${id}/media/${m.id}`);
+      setData((p) => ({ ...p, media: p.media.filter((x) => x.id !== m.id) }));
+      toast(m.media_type === 'video' ? 'Đã xoá video' : 'Đã xoá hình');
     } catch (x) { toast(x.message, 'error'); }
   };
   const removeTrip = async () => {
@@ -110,6 +120,10 @@ export default function Trip() {
                     </button>
                     <button type="button" title="Lưu về máy" onClick={() => download(m.url)}
                       className="absolute bottom-1.5 right-1.5 w-8 h-8 rounded-full bg-black/55 text-white text-sm hover:bg-black/75">⬇</button>
+                    {canDel(m) && (
+                      <button type="button" title="Xoá" onClick={() => setDelMedia(m)}
+                        className="absolute top-1.5 right-1.5 w-8 h-8 rounded-full bg-black/55 text-white text-sm hover:bg-rose-600">🗑</button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -147,6 +161,11 @@ export default function Trip() {
 
       {lb !== null && <Lightbox items={media} index={lb} onClose={() => setLb(null)} onIndex={setLb} />}
       {addOpen && <AddMembers members={members} onClose={() => setAddOpen(false)} onAdd={addMembers} />}
+      {delMedia && (
+        <Confirm title={delMedia.media_type === 'video' ? 'Xoá video này?' : 'Xoá hình này?'}
+          message="File sẽ bị xoá vĩnh viễn khỏi kỷ niệm và không thể khôi phục."
+          yes="Xoá" no="Không" onYes={removeMedia} onNo={() => setDelMedia(null)} />
+      )}
       {delAsk && (
         <Confirm title={`Xoá kỷ niệm "${trip.name}"?`} message="Toàn bộ ảnh, video, bình luận và chi phí của chuyến đi sẽ bị xoá vĩnh viễn."
           yes="Xoá" no="Không" onYes={removeTrip} onNo={() => setDelAsk(false)} />

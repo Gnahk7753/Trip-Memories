@@ -19,3 +19,11 @@ export function uploadToCloud(file, folder) {
       .end(file.buffer);
   });
 }
+
+// Xoá file khỏi Cloudinary (lấy public_id từ URL)
+export async function deleteFromCloud(url, type) {
+  if (!process.env.CLOUDINARY_URL) return;
+  const m = url.match(/\/upload\/(?:v\d+\/)?(.+?)(?:\.[a-zA-Z0-9]+)?$/);
+  if (!m) return;
+  await cloudinary.uploader.destroy(decodeURIComponent(m[1]), { resource_type: type === 'video' ? 'video' : 'image' });
+}

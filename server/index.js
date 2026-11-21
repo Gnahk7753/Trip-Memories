@@ -6,7 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { q, pool } from './db.js';
 import { signIn, requireAuth } from './auth.js';
-import { upload, uploadToCloud } from './upload.js';
+import { upload, uploadToCloud, deleteFromCloud } from './upload.js';
 import { computeDebts } from './debts.js';
 import { migrate } from './migrate.js';
 
@@ -146,7 +146,7 @@ app.get('/api/trips/:id', requireAuth, member, h(async (req, res) => {
   const [t, m, md, cm] = await Promise.all([
     q('SELECT * FROM trips WHERE id=$1', [id]),
     q('SELECT u.id, u.full_name, u.username FROM trip_members tm JOIN users u ON u.id=tm.user_id WHERE tm.trip_id=$1 ORDER BY u.full_name', [id]),
-    q('SELECT id, url, media_type FROM trip_media WHERE trip_id=$1 ORDER BY id', [id]),
+    q('SELECT id, url, media_type, uploaded_by FROM trip_media WHERE trip_id=$1 ORDER BY id', [id]),
     q('SELECT c.id, c.content, c.created_at, u.full_name FROM comments c JOIN users u ON u.id=c.user_id WHERE c.trip_id=$1 ORDER BY c.created_at', [id]),
   ]);
   res.json({ trip: t.rows[0], members: m.rows, media: md.rows, comments: cm.rows });
@@ -175,12 +175,34 @@ app.post('/api/trips/:id/media', requireAuth, member, upload.array('media'), h(a
   const uploaded = await Promise.all(req.files.map((f) => uploadToCloud(f, 'trips')));
   const added = [];
   for (const u of uploaded) {
-    const { rows } = await q('INSERT INTO trip_media(trip_id,url,media_type,uploaded_by) VALUES($1,$2,$3,$4) RETURNING id, url, media_type', [req.params.id, u.url, u.type, req.userId]);
+    const { rows } = await q('INSERT INTO trip_media(trip_id,url,media_type,uploaded_by) VALUES($1,$2,$3,$4) RETURNING id, url, media_type, uploaded_by', [req.params.id, u.url, u.type, req.userId]);
     added.push(rows[0]);
   }
   const firstImg = uploaded.find((u) => u.type === 'image');
   if (firstImg) await q('UPDATE trips SET cover_url=$1 WHERE id=$2 AND cover_url IS NULL', [firstImg.url, req.params.id]);
   res.json({ media: added });
+}));
+
+// Xoá 1 hình/video: người tải lên hoặc người tạo kỷ niệm
+app.delete('/api/trips/:id/media/:mid', requireAuth, member, h(async (req, res) => {
+  if (!/^\d+$/.test(req.params.mid)) return bad(res, 'Không tìm thấy file', 404);
+  const { rows } = await q(
+    `SELECT m.id, m.url, m.media_type
+       FROM trip_media m JOIN trips t ON t.id = m.trip_id
+      WHERE m.id=$1 AND m.trip_id=$2 AND (m.uploaded_by=$3 OR t.created_by=$3)`,
+    [req.params.mid, req.params.id, req.userId]);
+  if (!rows.length) return bad(res, 'Chỉ người tải lên hoặc người tạo kỷ niệm mới được xoá', 403);
+  const m = rows[0];
+  await q('DELETE FROM trip_media WHERE id=$1', [m.id]);
+
+  // Nếu là ảnh bìa thì đổi sang ảnh khác (hoặc để trống)
+  const { rows: t } = await q('SELECT cover_url FROM trips WHERE id=$1', [req.params.id]);
+  if (t[0]?.cover_url === m.url) {
+    const { rows: next } = await q("SELECT url FROM trip_media WHERE trip_id=$1 AND media_type='image' ORDER BY id LIMIT 1", [req.params.id]);
+    await q('UPDATE trips SET cover_url=$1 WHERE id=$2', [next[0]?.url || null, req.params.id]);
+  }
+  deleteFromCloud(m.url, m.media_type).catch(() => {}); // xoá trên Cloudinary, lỗi cũng bỏ qua
+  res.json({ ok: true });
 }));
 
 app.post('/api/trips/:id/comments', requireAuth, member, h(async (req, res) => {
