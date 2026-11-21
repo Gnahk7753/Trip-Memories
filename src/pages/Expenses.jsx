@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, vnd, num, fmtTime, download } from '../api.js';
+import { api, vnd, fullVnd, cleanK, num, fmtTime, download } from '../api.js';
 import { useToast } from '../toast.jsx';
 import Confirm from '../components/Confirm.jsx';
 import SmartImg from '../components/SmartImg.jsx';
@@ -96,8 +96,9 @@ function ExpenseForm({ trip, me, onDone }) {
           </select>
         </div>
         <div>
-          <label className="label">Tổng tiền (đ)</label>
-          <input className="input" inputMode="numeric" placeholder="0" value={total ? total.toLocaleString('vi-VN') : ''} onChange={(e) => setAmount(e.target.value)} required />
+          <label className="label">Tổng tiền (k)</label>
+          <input className="input" inputMode="decimal" placeholder="VD: 300" value={amount} onChange={(e) => setAmount(cleanK(e.target.value))} required />
+          {total > 0 && <div className="text-xs text-slate-400 mt-1">{vnd(total)} = {fullVnd(total)}</div>}
         </div>
       </div>
 
@@ -110,7 +111,7 @@ function ExpenseForm({ trip, me, onDone }) {
 
       {type === 'equal' ? (
         <div className="space-y-2">
-          <p className="text-sm text-slate-500">Chia cho những người được chọn{part.size > 0 && total > 0 ? ` (≈ ${vnd(Math.ceil(total / part.size))}/người)` : ''}:</p>
+          <p className="text-sm text-slate-500">Chia cho những người được chọn{part.size > 0 && total > 0 ? ` (${vnd(Math.round(total / part.size))}/người)` : ''}:</p>
           {members.map((m) => (
             <label key={m.id} className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={part.has(m.id)} onChange={() => toggle(m.id)} /> {m.full_name}
@@ -122,9 +123,9 @@ function ExpenseForm({ trip, me, onDone }) {
           {members.map((m) => (
             <div key={m.id} className="flex items-center gap-3">
               <span className="flex-1 text-sm">{m.full_name}</span>
-              <input className="input !w-36 text-right" inputMode="numeric" placeholder="0"
-                value={num(custom[m.id]) ? num(custom[m.id]).toLocaleString('vi-VN') : ''}
-                onChange={(e) => setCustom({ ...custom, [m.id]: e.target.value })} />
+              <input className="input !w-36 text-right" inputMode="decimal" placeholder="0 (k)"
+                value={custom[m.id] ?? ''}
+                onChange={(e) => setCustom({ ...custom, [m.id]: cleanK(e.target.value) })} />
             </div>
           ))}
           <p className={`text-sm font-medium ${diff === 0 && total > 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
@@ -207,7 +208,10 @@ function Debts({ tripId, me, tick }) {
           <div className="bg-white rounded-2xl p-5 w-full max-w-sm text-center space-y-3" onClick={(e) => e.stopPropagation()}>
             <div className="text-sm text-slate-500">Chuyển khoản cho</div>
             <div className="text-lg font-bold">{qr.name}</div>
-            <div className="text-2xl font-bold text-indigo-600">{vnd(qr.amount - qr.pending > 0 ? qr.amount - qr.pending : qr.amount)}</div>
+            <div>
+              <div className="text-2xl font-bold text-indigo-600">{vnd(qr.amount - qr.pending > 0 ? qr.amount - qr.pending : qr.amount)}</div>
+              <div className="text-sm text-slate-500">= {fullVnd(qr.amount - qr.pending > 0 ? qr.amount - qr.pending : qr.amount)}</div>
+            </div>
             {qr.qr ? <SmartImg src={qr.qr} alt="QR" className="mx-auto max-h-80 rounded-lg border" /> : (
               <p className="text-sm text-amber-600 py-6">{qr.name} chưa tải mã QR lên hồ sơ. Hãy nhắn bạn ấy bổ sung nhé.</p>
             )}

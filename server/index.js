@@ -234,7 +234,7 @@ app.post('/api/trips/:id/expenses', requireAuth, member, h(async (req, res) => {
   const tid = Number(req.params.id);
   const { payer_id, amount, split_type, participants = [], shares = [] } = req.body;
   const title = String(req.body.title || '').trim();
-  const total = Number(amount);
+  const total = Number(amount); // đơn vị đồng (client đổi từ "k": 300 => 300000)
   if (!title || !Number.isInteger(total) || total <= 0) return bad(res, 'Tên khoản chi hoặc số tiền không hợp lệ');
   const { rows: mem } = await q('SELECT user_id FROM trip_members WHERE trip_id=$1', [tid]);
   const ids = new Set(mem.map((r) => r.user_id));
@@ -244,9 +244,9 @@ app.post('/api/trips/:id/expenses', requireAuth, member, h(async (req, res) => {
   if (split_type === 'equal') {
     const p = [...new Set(participants.map(Number))].filter((x) => ids.has(x));
     if (!p.length) return bad(res, 'Chọn ít nhất 1 người chia tiền');
-    const base = Math.floor(total / p.length);
-    const rem = total - base * p.length; // phần lẻ chia cho những người đầu danh sách
-    list = p.map((uid, i) => ({ user_id: uid, amount: base + (i < rem ? 1 : 0) }));
+    // Mỗi người trả cùng một số, làm tròn đến 3 số thập phân của "k" (= 1đ). VD 50k / 6 = 8,333k
+    const each = Math.round(total / p.length);
+    list = p.map((uid) => ({ user_id: uid, amount: each }));
   } else if (split_type === 'custom') {
     list = shares.map((s) => ({ user_id: Number(s.user_id), amount: Number(s.amount) })).filter((s) => s.amount > 0);
     if (!list.length || new Set(list.map((s) => s.user_id)).size !== list.length || list.some((s) => !ids.has(s.user_id) || !Number.isInteger(s.amount)))

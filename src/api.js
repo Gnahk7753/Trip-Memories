@@ -16,8 +16,22 @@ export const api = {
   put: (u, b) => req('PUT', u, b),
   del: (u) => req('DELETE', u),
 };
-export const vnd = (n) => new Intl.NumberFormat('vi-VN').format(n) + 'đ';
-export const num = (s) => parseInt(String(s ?? '').replace(/\D/g, ''), 10) || 0;
+// Tiền lưu trong database theo đồng (số nguyên). Giao diện nhập/hiển thị theo "k" (nghìn đồng):
+// 300 = 300k = 300.000đ ; 8,333 = 8,333k = 8.333đ (3 số thập phân sau dấu phẩy = chính xác đến 1đ)
+export const vnd = (n) => new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 3 }).format(Number(n) / 1000) + 'k';
+export const fullVnd = (n) => new Intl.NumberFormat('vi-VN').format(n) + 'đ';
+// Làm sạch chuỗi người dùng gõ: chỉ giữ số và 1 dấu thập phân (gõ , hoặc . đều được), tối đa 3 số lẻ
+export const cleanK = (s) => {
+  let t = String(s ?? '').replace(/[^\d.,]/g, '').replace(/\./g, ',');
+  const i = t.indexOf(',');
+  if (i >= 0) t = t.slice(0, i + 1) + t.slice(i + 1).replace(/,/g, '').slice(0, 3);
+  return t;
+};
+// "8,333" (k) -> 8333 (đồng)
+export const num = (s) => {
+  const [a = '', b = ''] = cleanK(s).split(',');
+  return (parseInt(a || '0', 10) || 0) * 1000 + (parseInt(b.padEnd(3, '0') || '0', 10) || 0);
+};
 export const fmtDate = (s) => {
   const [y, m, d] = String(s).slice(0, 10).split('-');
   return `${d}/${m}/${y}`;
