@@ -22,7 +22,7 @@ function Shell() {
     <div className="min-h-screen">
       <header className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b">
         <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 font-bold text-slate-800"><img src="/logo.png" alt="" className="w-8 h-8" />Kỷ niệm chuyến đi</Link>
+          <Link to="/" className="flex items-center gap-2 font-bold text-slate-800"><img src="/logo.png" alt="" className="w-8 h-8" />Memories</Link>
           <div className="flex items-center gap-3 text-sm">
             <Link to="/profile" className="font-medium truncate max-w-[9rem]">{user.full_name}</Link>
             <button onClick={() => setAsk(true)} className="text-slate-500 hover:text-slate-800">Đăng xuất</button>
