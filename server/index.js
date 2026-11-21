@@ -152,6 +152,24 @@ app.get('/api/trips/:id', requireAuth, member, h(async (req, res) => {
   res.json({ trip: t.rows[0], members: m.rows, media: md.rows, comments: cm.rows });
 }));
 
+// Thêm bạn vào chuyến đi đã tạo (mọi thành viên đều thêm được, tránh sót người)
+app.post('/api/trips/:id/members', requireAuth, member, h(async (req, res) => {
+  const ids = [...new Set((req.body.user_ids || []).map(Number).filter(Number.isInteger))];
+  if (!ids.length) return bad(res, 'Chưa chọn ai để thêm');
+  const { rows: valid } = await q('SELECT id FROM users WHERE id = ANY($1)', [ids]);
+  if (valid.length !== ids.length) return bad(res, 'Có tài khoản không tồn tại');
+  for (const uid of ids) await q('INSERT INTO trip_members(trip_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING', [req.params.id, uid]);
+  const { rows } = await q('SELECT u.id, u.full_name, u.username FROM trip_members tm JOIN users u ON u.id=tm.user_id WHERE tm.trip_id=$1 ORDER BY u.full_name', [req.params.id]);
+  res.json({ members: rows });
+}));
+
+// Chỉ người tạo mới được xoá kỷ niệm (ảnh, bình luận, chi phí, công nợ xoá theo nhờ ON DELETE CASCADE)
+app.delete('/api/trips/:id', requireAuth, member, h(async (req, res) => {
+  const r = await q('DELETE FROM trips WHERE id=$1 AND created_by=$2', [req.params.id, req.userId]);
+  if (!r.rowCount) return bad(res, 'Chỉ người tạo kỷ niệm mới được xoá', 403);
+  res.json({ ok: true });
+}));
+
 app.post('/api/trips/:id/media', requireAuth, member, upload.array('media', 20), h(async (req, res) => {
   if (!req.files?.length) return bad(res, 'Chưa chọn file');
   const uploaded = await Promise.all(req.files.map((f) => uploadToCloud(f, 'trips')));

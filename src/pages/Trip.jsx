@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api, fmtDate, fmtTime, download } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { useToast } from '../toast.jsx';
 import SmartImg from '../components/SmartImg.jsx';
 import Lightbox from '../components/Lightbox.jsx';
+import Confirm from '../components/Confirm.jsx';
 import Expenses from './Expenses.jsx';
 
 export default function Trip() {
@@ -18,6 +19,9 @@ export default function Trip() {
   const [busy, setBusy] = useState(false);
   const [lb, setLb] = useState(null);
   const fileRef = useRef();
+  const nav = useNavigate();
+  const [addOpen, setAddOpen] = useState(false);
+  const [delAsk, setDelAsk] = useState(false);
 
   useEffect(() => { api.get(`/trips/${id}`).then(setData).catch((e) => setErr(e.message)); }, [id]);
 
@@ -43,6 +47,18 @@ export default function Trip() {
       setData((p) => ({ ...p, comments: [...p.comments, d.comment] })); setText('');
     } catch (x) { toast(x.message, 'error'); }
   };
+  const addMembers = async (user_ids) => {
+    try {
+      const d = await api.post(`/trips/${id}/members`, { user_ids });
+      setData((p) => ({ ...p, members: d.members }));
+      setAddOpen(false);
+      toast(`Đã thêm ${user_ids.length} người vào chuyến đi`);
+    } catch (x) { toast(x.message, 'error'); }
+  };
+  const removeTrip = async () => {
+    setDelAsk(false);
+    try { await api.del(`/trips/${id}`); toast('Đã xoá kỷ niệm'); nav('/'); } catch (x) { toast(x.message, 'error'); }
+  };
   const downloadAll = () => {
     toast(`Đang tải ${media.length} file… (nếu trình duyệt hỏi, hãy cho phép tải nhiều file)`);
     media.forEach((m, i) => setTimeout(() => download(m.url), i * 700));
@@ -57,6 +73,7 @@ export default function Trip() {
         {trip.description && <p className="mt-2 text-sm">{trip.description}</p>}
         <div className="flex flex-wrap gap-1.5 mt-3">
           {members.map((m) => <span key={m.id} className="text-xs bg-slate-100 rounded-full px-2.5 py-1">{m.full_name}</span>)}
+          <button type="button" onClick={() => setAddOpen(true)} className="text-xs rounded-full px-2.5 py-1 border border-dashed border-indigo-400 text-indigo-600 hover:bg-indigo-50">+ Thêm bạn</button>
         </div>
       </div>
 
@@ -121,7 +138,52 @@ export default function Trip() {
         <Expenses trip={{ id: trip.id, members }} me={user} />
       )}
 
+      {trip.created_by === user.id && (
+        <div className="pt-6 mt-6 border-t text-center">
+          <button type="button" onClick={() => setDelAsk(true)} className="text-sm text-rose-600 hover:underline">🗑 Xoá kỷ niệm này</button>
+        </div>
+      )}
+
       {lb !== null && <Lightbox items={media} index={lb} onClose={() => setLb(null)} onIndex={setLb} />}
+      {addOpen && <AddMembers members={members} onClose={() => setAddOpen(false)} onAdd={addMembers} />}
+      {delAsk && (
+        <Confirm title={`Xoá kỷ niệm "${trip.name}"?`} message="Toàn bộ ảnh, video, bình luận và chi phí của chuyến đi sẽ bị xoá vĩnh viễn."
+          yes="Xoá" no="Không" onYes={removeTrip} onNo={() => setDelAsk(false)} />
+      )}
+    </div>
+  );
+}
+
+function AddMembers({ members, onClose, onAdd }) {
+  const [users, setUsers] = useState(null);
+  const [sel, setSel] = useState(new Set());
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api.get('/users').then((d) => setUsers(d.users.filter((u) => !members.some((m) => m.id === u.id))));
+  }, []);
+  const toggle = (uid) => { const s = new Set(sel); s.has(uid) ? s.delete(uid) : s.add(uid); setSel(s); };
+  const submit = async () => { setBusy(true); await onAdd([...sel]); setBusy(false); };
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-5 w-full max-w-sm space-y-4" onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-bold text-lg">Thêm bạn vào chuyến đi</h3>
+        {users === null ? <p className="text-sm text-slate-500">Đang tải…</p> : users.length === 0 ? (
+          <p className="text-sm text-slate-500">Tất cả tài khoản trong hệ thống đã có trong chuyến đi này.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {users.map((u) => (
+              <button type="button" key={u.id} onClick={() => toggle(u.id)}
+                className={`rounded-full border px-3 py-1.5 text-sm ${sel.has(u.id) ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-300'}`}>
+                {sel.has(u.id) ? '✓ ' : ''}{u.full_name}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-3">
+          <button className="btn btn-ghost flex-1" onClick={onClose}>Huỷ</button>
+          <button className="btn btn-primary flex-1" disabled={!sel.size || busy} onClick={submit}>{busy ? 'Đang thêm…' : `Thêm${sel.size ? ` (${sel.size})` : ''}`}</button>
+        </div>
+      </div>
     </div>
   );
 }
